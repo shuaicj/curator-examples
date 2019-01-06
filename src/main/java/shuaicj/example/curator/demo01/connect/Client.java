@@ -12,14 +12,11 @@ import org.apache.curator.retry.RetryNTimes;
  */
 public class Client {
 
-    public static CuratorFramework get() {
+    public static CuratorFramework get(String connectString) {
         int maxRetries = 3;
         int retryIntervalMillis = 1000;
         RetryPolicy retryPolicy = new RetryNTimes(maxRetries, retryIntervalMillis);
 
-        CuratorFramework client = CuratorFrameworkFactory.newClient("127.0.0.1:2181", retryPolicy);
-        client.start();
-
-        return client;
+        return CuratorFrameworkFactory.newClient(connectString, retryPolicy);
     }
 }

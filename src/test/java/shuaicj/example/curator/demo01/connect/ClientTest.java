@@ -1,9 +1,10 @@
 package shuaicj.example.curator.demo01.connect;
 
 import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.test.TestingServer;
 import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Test {@link Client}.
@@ -13,9 +14,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ClientTest {
 
     @Test
-    public void get() {
-        CuratorFramework client = Client.get();
-        assertThat(client).isNotNull();
+    public void get() throws Exception {
+        TestingServer server = new TestingServer();
+        server.start();
+        CuratorFramework client = Client.get(server.getConnectString());
+        client.start();
+        TimeUnit.MILLISECONDS.sleep(100);
         client.close();
+        server.close();
     }
 }
