@@ -1,12 +1,10 @@
 package shuaicj.example.curator.demo03.cache;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-
 import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.NodeCache;
+import org.apache.curator.framework.recipes.cache.PathChildrenCache;
+import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
 import org.apache.curator.test.TestingServer;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -14,10 +12,19 @@ import org.junit.Test;
 import shuaicj.example.curator.demo01.connect.Client;
 import shuaicj.example.curator.demo02.basic.ops.BasicOps;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
 /**
  * Test {@link CacheOps}.
  *
- * @author shuaicj 2019/01/18
+ * @author shuaicj 2019/02/09
  */
 public class CacheOpsTest {
 
@@ -45,19 +52,57 @@ public class CacheOpsTest {
 
     @Test
     public void newNodeCache() throws Exception {
-        String path = "/demo03";
-        BlockingQueue<String> dataHolder = new LinkedBlockingQueue<>();
+        String path = "/demo03/node";
+        BlockingQueue<Optional<String>> dataHolder = new LinkedBlockingQueue<>();
         NodeCache cache = cacheOps.newNodeCache(path, dataHolder::offer);
         assertThat(cache.getCurrentData()).isNull();
 
         basicOps.create(path, "abc");
-        assertThat(dataHolder.take()).isEqualTo("abc");
+        assertThat(dataHolder.take()).isPresent().contains("abc");
 
         basicOps.setData(path, "def");
-        assertThat(dataHolder.take()).isEqualTo("def");
+        assertThat(dataHolder.take()).isPresent().contains("def");
 
         basicOps.setData(path, "def");
-        assertThat(dataHolder.take()).isEqualTo("def");
+        assertThat(dataHolder.take()).isPresent().contains("def");
+
+        basicOps.delete(path);
+        assertThat(dataHolder.take()).isNotPresent();
+
+        cache.close();
+    }
+
+    @Test
+    public void newPathChildrenCache() throws Exception {
+        basicOps.create("/demo03/child/abc", "abc");
+        basicOps.create("/demo03/child/def", "def");
+        BlockingQueue<PathChildrenCacheEvent> eventHolder = new LinkedBlockingQueue<>();
+        PathChildrenCache cache = cacheOps.newPathChildrenCache("/demo03/child", eventHolder::offer);
+
+        List<ChildData> curData = new ArrayList<>(cache.getCurrentData());
+        curData.sort(Comparator.comparing(ChildData::getPath));
+        assertThat(curData).hasSize(2);
+        assertThat(curData.get(0).getPath()).isEqualTo("/demo03/child/abc");
+        assertThat(curData.get(0).getData()).isEqualTo("abc".getBytes());
+        assertThat(curData.get(1).getPath()).isEqualTo("/demo03/child/def");
+        assertThat(curData.get(1).getData()).isEqualTo("def".getBytes());
+
+        basicOps.create("/demo03/child/ghi", "ghi");
+        PathChildrenCacheEvent event = eventHolder.take();
+        assertThat(event.getType()).isEqualTo(PathChildrenCacheEvent.Type.CHILD_ADDED);
+        assertThat(event.getData().getPath()).isEqualTo("/demo03/child/ghi");
+        assertThat(event.getData().getData()).isEqualTo("ghi".getBytes());
+
+        basicOps.setData("/demo03/child/def", "xxx");
+        event = eventHolder.take();
+        assertThat(event.getType()).isEqualTo(PathChildrenCacheEvent.Type.CHILD_UPDATED);
+        assertThat(event.getData().getPath()).isEqualTo("/demo03/child/def");
+        assertThat(event.getData().getData()).isEqualTo("xxx".getBytes());
+
+        basicOps.delete("/demo03/child/abc");
+        event = eventHolder.take();
+        assertThat(event.getType()).isEqualTo(PathChildrenCacheEvent.Type.CHILD_REMOVED);
+        assertThat(event.getData().getPath()).isEqualTo("/demo03/child/abc");
 
         cache.close();
     }
