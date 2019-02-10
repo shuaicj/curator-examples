@@ -5,6 +5,8 @@ import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
+import org.apache.curator.framework.recipes.cache.TreeCache;
+import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 import org.apache.curator.test.TestingServer;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -24,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Test {@link CacheOps}.
  *
- * @author shuaicj 2019/02/09
+ * @author shuaicj 2019/02/10
  */
 public class CacheOpsTest {
 
@@ -103,6 +105,52 @@ public class CacheOpsTest {
         event = eventHolder.take();
         assertThat(event.getType()).isEqualTo(PathChildrenCacheEvent.Type.CHILD_REMOVED);
         assertThat(event.getData().getPath()).isEqualTo("/demo03/child/abc");
+
+        cache.close();
+    }
+
+    @Test
+    public void newTreeCache() throws Exception {
+        // basicOps.create("/demo03/tree", "tree");
+        basicOps.create("/demo03/tree/abc", "abc");
+        basicOps.create("/demo03/tree/def", "def");
+        BlockingQueue<TreeCacheEvent> eventHolder = new LinkedBlockingQueue<>();
+        TreeCache cache = cacheOps.newTreeCache("/demo03/tree", eventHolder::offer);
+
+        TreeCacheEvent event = eventHolder.take();
+        assertThat(event.getType()).isEqualTo(TreeCacheEvent.Type.NODE_ADDED);
+        assertThat(event.getData().getPath()).isEqualTo("/demo03/tree");
+        assertThat(event.getData().getData()).isEqualTo("".getBytes());
+
+        event = eventHolder.take();
+        assertThat(event.getType()).isEqualTo(TreeCacheEvent.Type.NODE_ADDED);
+        assertThat(event.getData().getPath()).isEqualTo("/demo03/tree/abc");
+        assertThat(event.getData().getData()).isEqualTo("abc".getBytes());
+
+        event = eventHolder.take();
+        assertThat(event.getType()).isEqualTo(TreeCacheEvent.Type.NODE_ADDED);
+        assertThat(event.getData().getPath()).isEqualTo("/demo03/tree/def");
+        assertThat(event.getData().getData()).isEqualTo("def".getBytes());
+
+        basicOps.create("/demo03/tree/abc/ghi", "ghi");
+        event = eventHolder.take();
+        assertThat(event.getType()).isEqualTo(TreeCacheEvent.Type.NODE_ADDED);
+        assertThat(event.getData().getPath()).isEqualTo("/demo03/tree/abc/ghi");
+        assertThat(event.getData().getData()).isEqualTo("ghi".getBytes());
+
+        basicOps.setData("/demo03/tree/def", "xxx");
+        event = eventHolder.take();
+        assertThat(event.getType()).isEqualTo(TreeCacheEvent.Type.NODE_UPDATED);
+        assertThat(event.getData().getPath()).isEqualTo("/demo03/tree/def");
+        assertThat(event.getData().getData()).isEqualTo("xxx".getBytes());
+
+        basicOps.delete("/demo03/tree/abc");
+        event = eventHolder.take();
+        assertThat(event.getType()).isEqualTo(TreeCacheEvent.Type.NODE_REMOVED);
+        assertThat(event.getData().getPath()).isEqualTo("/demo03/tree/abc/ghi");
+        event = eventHolder.take();
+        assertThat(event.getType()).isEqualTo(TreeCacheEvent.Type.NODE_REMOVED);
+        assertThat(event.getData().getPath()).isEqualTo("/demo03/tree/abc");
 
         cache.close();
     }

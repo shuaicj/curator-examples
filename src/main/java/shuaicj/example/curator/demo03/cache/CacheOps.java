@@ -6,6 +6,8 @@ import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
+import org.apache.curator.framework.recipes.cache.TreeCache;
+import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -13,7 +15,7 @@ import java.util.function.Consumer;
 /**
  * Cache operations.
  *
- * @author shuaicj 2019/02/09
+ * @author shuaicj 2019/02/10
  */
 @Slf4j
 public class CacheOps {
@@ -57,10 +59,33 @@ public class CacheOps {
                     eventConsumer.accept(event);
                     break;
                 default:
-                    log.error("error happens, {}", event);
+                    log.info("other events received, {}", event);
             }
         });
         cache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
+        return cache;
+    }
+
+    public TreeCache newTreeCache(String path, Consumer<TreeCacheEvent> eventConsumer)
+            throws Exception {
+        TreeCache cache = new TreeCache(client, path);
+        cache.getListenable().addListener((client, event) -> {
+            switch (event.getType()) {
+                case NODE_ADDED:
+                case NODE_UPDATED:
+                    String data = new String(event.getData().getData());
+                    log.info("{}, path: {}, data: {}", event.getType(), event.getData().getPath(), data);
+                    eventConsumer.accept(event);
+                    break;
+                case NODE_REMOVED:
+                    log.info("{}, path: {}", event.getType(), event.getData().getPath());
+                    eventConsumer.accept(event);
+                    break;
+                default:
+                    log.info("other events received, {}", event);
+            }
+        });
+        cache.start();
         return cache;
     }
 }
